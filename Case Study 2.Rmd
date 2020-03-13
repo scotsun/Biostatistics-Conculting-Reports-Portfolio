@@ -1,0 +1,196 @@
+---
+title: "Case Study on Visuospatial Ability's Effect on Mathematical Performance"
+subtitle: "Bioengineering Statistics (MA482/BE482)"
+author: 
+  - "Scott Sun, CM#1271"
+output:
+  word_document: 
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("https://reyesem.github.io/files/MA482/MA482Setup.R")
+```
+
+```{r, include=FALSE}
+math_achievement <- read.csv("vssp datafile.csv") %>%
+  na.omit()
+```
+
+## Introduction
+It has been believed that a person's mathematical performance is linked with his or her visuospatial ability. Recently, a longitudinal study on children's mathematical performance was conducted by a group of researchers. The study followed roughly 145 children, starting from their 1st grade up through the 9th grade. The mathematical performance was measured by the test score of a series of yearly standardized exams. Some baseline characteristics about memorization abilities and in-class attendance were also obtained through various corresponding assessments during the beginning of the study. Our goal was to examine whether or not the visuospatial ability has an impact on the growth trajectory.
+
+## Method
+Since the repeated measurements of subjects impose a correlation structures on the data, the classical regression conditions would no longer hold. We would like to fit a mixed-effects model for this longitudinal study. There was a scientific belief that the number of grade, on the individual level, had a linear effect on a child's math achievement. 
+
+Then, subject-level model was shown as the follows.
+$$
+\begin{aligned}
+(NO)_{i,j} &= \alpha_{0,i}+\alpha_{1,i}(Grade)_{i,j} + \epsilon_{i,j}
+\end{aligned}
+$$
+On the population level, we supposed various baseline characteristics from the individuals would have fixed effects on the achievements, including VSSP, CE, IQ, SWAN, PL, and gender. We also assumed that all these fixed effects are linear as well.
+
+Then,
+$$
+\begin{aligned}
+\alpha_{0,i} &= \beta_{0} + b_{0,i} + \beta_{2}(VSSP)_{i} + \beta_{3}(CE)_i \\ 
+&+ \beta_{4}(IQ)_{i} + \beta_{5}(SWAN)_{i} + \beta_{6}(PL)_{i} + \beta_{7}(Male)_{i} 
+\end{aligned}
+$$
+
+where,
+$$
+\begin{aligned}
+(Male)_i &= \left\{
+        \begin{array}{ll}
+            1, & \textrm{if the } i^{th} \textrm{ subject is male} \\
+            0, & \textrm{otherwise}
+        \end{array}
+    \right.\\
+\\
+\end{aligned}
+$$
+Since it was believed that the emphasis of mathematics education was changing over time, visuospatial ability and central executive ability might have an effect on the growth trajectory of each individuals. As the result, we proposed a formula as the follows.
+
+$$
+\alpha_{1,i} = \beta_{1} + b_{1,i} + \beta_{8}(VSSP)_{i} + \beta_{9}(CE)_i
+$$
+Therefore, the population-level model was derived as the follows.
+
+$$
+\begin{aligned}
+(NO)_{i,j} &= (\beta_{0} + b_{0,i}) + (\beta_{1}+b_{1,i})(Grade)_{i,j} + \beta_{2}(VSSP)_{i} + \beta_{3}(CE)_i \\ 
+&+ \beta_{4}(IQ)_{i} + \beta_{5}(SWAN)_{i} + \beta_{6}(PL)_{i} + \beta_{7}(Male)_{i} \\
+&+ \beta_{8}(VSSP)_{i}(Grade)_{i,j} + \beta_{9}(CE)_{i}(Grade)_{i,j} + \epsilon_{i,j}
+\end{aligned}
+$$
+
+
+## Results
+**Assessment on the belief of the changing emphasis and model revision** Based on the analysis result, the belief was inconsistent with the data. We had no evidence to say that students tend to rely on the central executive ability during elementary learning period and the visuospatial ability during post-elementary learning period($\beta_8$'s CI is (-0.017,0.112) and $\beta_9$'s CI is (-0.012,0.078))(Table 1). However, we had evidence to say at least either visuospatial ability or central executive ability had impact on the growth trajectory (P = 0.015). In order to solve the question of interest, we reduced the original model as follows.
+$$
+\begin{aligned}
+(NO)_{i,j} &= (\beta_{0} + b_{0,i}) + (\beta_{1}+b_{1,i})(Grade)_{i,j} + \beta_{2}(VSSP)_{i} + \beta_{3}(CE)_i \\ 
+&+ \beta_{4}(IQ)_{i} + \beta_{5}(SWAN)_{i} + \beta_{6}(PL)_{i} + \beta_{7}(Male)_{i} \\
+&+ \beta_{8}(VSSP)_{i}(Grade)_{i,j} + \epsilon_{i,j}
+\end{aligned}
+$$
+
+**Visuospatial ability's and the grade number's effect on the performance.** Based on the mixed effect model, the grade number had an negative effect while the visuospatial ability did not influence the performance directly ($\beta_1=-1.997$, $P=0.020$; $\beta_2=-0.103$, $P=0.566$). Figure 1, describing the growth trajectories of subjects, also demonstrated that visuospatial ability did not have a straightforward effect. However, we had the evidence to say that a child's mathematical performance's growth depended on his or her visuospatial ability ($\beta_{8}=0.072$, $P=0.012$)(Table 3 and Table 4).
+
+```{r fig, echo=FALSE, fig.cap="\\label{fig:figs}Figure 1: Growth trajectories of math performance over years from the subjects in the study", fig.width=5, fig.asp=0.8}
+ggplot(data = math_achievement,
+       mapping = aes(x = GRADE,
+                     y = NO,
+                     group = ID,
+                     colour = VSSP_TS)) +
+  geom_point() +
+  geom_line(size = 1) +
+  scale_x_continuous(labels = c(1, 3, 5, 7, 9)) +
+  labs(x = "Grade",
+       y = "Numeric Operation score",
+       colour = "Visuospatial Ability") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+**Other confounders' effects on the performance.** Based on the mixed effect model, central executive memory ability had a positive effect on the performance ($\beta_3 = 0.375$, $P=0.001$). Apart from that, we also had evidence that IQ and in-class attentiveness were positively effective ($\beta_4 = 0.305$, $P<0.001$; $\beta_5 = 3.307$, $P<0.001$). We had no evidence that phonological score had an effect ($\beta_6 = -0.157$, $P=0.052$). Male subjests tend to have better achievements ($\beta_7 = 4.437$, $P=0.009$)(Table 3 and Table 4).
+
+## Appendix
+Fit the data with the mixed-effect model we've built above.
+```{r, warning=FALSE}
+# mixed-effect model
+mixed_formula <- (NO ~ GRADE + VSSP_TS + CE_TS + IQ + SWAN + PL_TS + SEX 
+                  + VSSP_TS:GRADE + CE_TS:GRADE + (1+GRADE|ID))
+fit.math_achievement <- lmer(mixed_formula, data = math_achievement)
+tidy(fit.math_achievement, conf.int = TRUE) %>%
+  knitr::kable(digits = 3, caption = "Table 1: The analytical results of the mixed-effect model based on the linear assumption.")
+```
+
+Apply linear hypothesis tests to examine the coefficients's statistical significance:
+```{r}
+K_test <- function(n, model){
+  # description: this function conduct a linear hypothesis test on a single coefficient
+  # parameters:
+    # n: the index of the coefficient beta of interest
+    # model: the model having been fitted
+  # output: p-value
+  mat <- rep(0,10)
+  mat[n+1] <- 1
+  K <- matrix(mat, nrow = 1, ncol = 10, byrow = TRUE)
+  test <- linearHypothesis(model, K)
+  test$`Pr(>Chisq)`[2]
+}
+```
+
+Assess each individual term's effect, including the interaction terms', and store the p-values in a tibble.
+```{r}
+terms <- c("GRADE", "VSSP_TS", "CE_TS", "IQ", "SWAN", "PL_TS", "Male", 
+           "GRADE:VSSP_TS", "GRADE:CE_TS")
+p_vals <- c()
+for (i in 1:9) {
+  p <- K_test(i, fit.math_achievement)
+  p_vals <- append(p_vals, p)
+}
+tibble(term = terms,
+       p_val = p_vals) %>%
+  knitr::kable(digits = 3, caption = "Table 2: p-values for each individual term.")
+```
+
+Test on both interation terms
+```{r}
+K <- matrix(
+  c(rep(0,8),1,0,
+    rep(0,8),0,1),
+  nrow = 2, ncol = 10, byrow = TRUE
+)
+linearHypothesis(fit.math_achievement, K)
+```
+
+Generate results after the adjustment.
+```{r, warning=FALSE}
+# mixed-effect model
+mixed_formula2 <- (NO ~ GRADE + VSSP_TS + CE_TS + IQ + SWAN + PL_TS + SEX 
+                  + VSSP_TS:GRADE + (1+GRADE|ID))
+fit.math_achievement2 <- lmer(mixed_formula2, data = math_achievement)
+tidy(fit.math_achievement2, conf.int = TRUE) %>%
+  knitr::kable(digits = 3, caption = "Table 3: The analytical results of the mixed-effect model based on the linear assumption after the adjustment.")
+```
+
+```{r}
+terms <- c("GRADE", "VSSP_TS", "CE_TS", "IQ", "SWAN", "PL_TS", "Male", 
+           "GRADE:VSSP_TS")
+K_test2 <- function(n, model){
+  mat <- rep(0,9)
+  mat[n+1] <- 1
+  K <- matrix(mat, nrow = 1, ncol = 9, byrow = TRUE)
+  test <- linearHypothesis(model, K)
+  test$`Pr(>Chisq)`[2]
+}
+p_vals <- c()
+for (i in 1:8) {
+  p <- K_test2(i, fit.math_achievement2)
+  p_vals <- append(p_vals, p)
+}
+tibble(term = terms,
+       p_val = p_vals) %>%
+  knitr::kable(digits = 3, caption = "Table 4: p-values for each individual term after the adjustment.")
+```
+
+The following chunk is used to generate Figure 1.
+```{r, eval=FALSE, fig.cap="\\label{fig:figs}Figure 1: Growth of math performance over years from 25 randomly selected subjects in the study", fig.width=4.8, fig.asp=0.8}
+ggplot(data = math_achievement,
+       mapping = aes(x = GRADE,
+                     y = NO,
+                     group = ID,
+                     colour = VSSP_TS)) +
+  geom_point() +
+  geom_line(size = 1) +
+  scale_x_continuous(labels = c(1, 3, 5, 7, 9)) +
+  labs(x = "Grade",
+       y = "Numeric Operation score",
+       colour = "Visuospatial Ability") +
+  theme_bw() +
+  theme(legend.position = "bottom")

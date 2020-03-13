@@ -1,0 +1,299 @@
+---
+title: "Case Study on YYB Program"
+subtitle: "Bioengineering Statistics (MA482/BE482)"
+author: 
+  - "Scott Sun, CM#1271"
+output:
+  word_document: 
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pkgs <- c("car","skimr","splines","geepack","rms","lme4",
+          "tidyverse","broom","knitr","gridExtra")
+for (pkg in pkgs) {
+  library(pkg, character.only = TRUE)
+}
+```
+
+```{r, include=FALSE}
+yyb <- read_csv("Subset of YYB Surveys.csv",
+                col_types = str_c(rep("n", 61), collapse = ""))
+```
+
+
+## Introduction
+Ying Yang Bao (YYB) is a food supplement used to improve children's hemoglobin level. In order to examine YYB's effectiveness, a group of researchers conducted a study on children from two poor counties, which shared similar characteristics. One of them was chosen to receive YYB from the government, and the other one was chosen to become the control group. In this case study, we were given a dataset collected during the research, which documented information about children's height, hemoglobin level, diet, living environment, etc. Our task was to determine if YYB had influence on children's hemoglobin level and if the influence depended on gender or their baseline hemoglobin level.
+
+
+## Method
+Given the fact the study was not randomized, we performed comparisons on some baseline characteristics between the two groups by using t tests and a chi-squared test. The boxplot in Figure 1 summarised children's hemoglobin level at their final visit, and Table 1 summarised the comparsions made on some key characteristics between the two groups.
+
+Apart from that, we assumed all conditions for the classical linear model held and all covariates were linearly related to the response. In order to examine the effectiveness of YYB, we could construct the following mathematical model:
+
+$$
+(finalHB)_i = \beta_0+\beta_1(intv)_i+
+\beta_2(male)_i+\beta_3(finalHB)_i+\epsilon_i
+$$
+where,
+$$
+\begin{align*}
+(intv)_i &= \left\{
+        \begin{array}{ll}
+            1, & \textrm{if from the intervention county}\\
+            0, & \textrm{otherwise}
+        \end{array}
+    \right.\\
+\\
+(male)_i &= \left\{
+        \begin{array}{ll}
+            1, & \textrm{if male}\\
+            0, & \textrm{if female}
+        \end{array}
+    \right.
+\end{align*}
+$$
+In order to explore whether the intervention's effect depended on children's gender or their baseline hemoglobin level, we could construct the following model:
+
+$$
+\begin{multline*}
+(finalHB)_i = \beta_0+\beta_1(intv)_i+
+\beta_2(male)_i+\beta_3(baseHB)_i+\beta_4(intv)_i(male)_i+\beta_5(intv)_i(baseHB)_i+
+\epsilon_i
+\end{multline*}
+$$
+
+Now, we could assess our assumptions by looking for the patterns in the residuals, which were the representatives of the error term in our models. Figure 2 consisted of several graphics used to assess our assumption on the linear model. According to the residue vs. fitted value graph, it was reasonable to conclude that the data were consistent with the mean of zero condition and constant variance condition, since almost all of the points centered around zero with similar degree of variability. If the data were sorted correctly, the residual vs. order graph proved the independence among subjects, and it was also sensible that a child's hemoglobin level is independent from other's. Additionally, the qqnorm plot implied the errors followed a normal distribution.
+
+## Results
+
+**Comparisons on some baseline characteristics of children.** The dataset documented records of 1612 children from two counties in Qinghai Province: 1025 of them were from the intervention county, and 587 of them were from the controled county. As shown in Table 1, there was no significant difference in the baseline characteristics we selected for the comparisons. However, Since many data were missed and some data were collected inappropriately, it did not neccessarily mean that the two groups were completely the same.
+
+|                                            | Intervention         | Control county       |P     |
+| :----------------------------------------- | :------------------: | :------------------: |-----:|
+| Househoud size                             | $5.48\pm1.21$        | $5.50\pm1.69$        |0.615 |
+| Female %                                   | 0.476                | 0.475                |1     |
+| Number of time of consuming non-liquid food| $2.94\pm1.51$        | $3.01\pm1.24$        |0.365 |
+| Baseline Hb level                          | $116.5\pm14.5$       | $116.1\pm14.1$       |0.615 |
+
+*Table 1: Some baseline characteristics of children from two different counties*
+
+**Treatment group comparison.** Based on the the first mathematical model we built previously, there was no evidence YYB improved children's final hemoglobin level ($\beta_1 = -0.065$, $P = 0.93$)(Table 2). Besides, the boxplot in Figure 1 visually demonstrated that there was no significance diffence in children's finial hemoglobin level between the two groups. Children's gender and intial hemoglobin level were also not associated with it ($\beta_2 = -0.051$, $P = 0.944$; $\beta_3 = -0.008$, $P = 0.740$)(Table 2).
+
+```{r, echo=FALSE}
+model_data <- yyb %>%
+  select("ID1a","ID6","BaselineHB","FinalHB")
+colnames(model_data) <- c("county","sex","baselineHB","finalHB")
+model_data <- model_data %>%
+  mutate(county = recode(county,
+                         "1" = "intv",
+                         "2" = "ctrl"),
+         sex = recode(sex,
+                      "1" = "male",
+                      "2" = "female"))
+fit_1 <- lm(finalHB ~ county + sex + baselineHB,
+          data = model_data)
+tidy(fit_1, conf.int = TRUE) %>%
+  knitr::kable(digits = 3, caption = "Table 2: The analytical results of the coefficients, each corresponding to a term in the table, from the first mathematical model")
+```
+
+
+```{r fig, echo=FALSE, fig.cap="\\label{fig:figs}Figure 1: The final hemoglobin level of children from the two different counties", fig.width=2.5, fig.asp=1.2}
+yyb = yyb %>%
+  mutate(ID1a = recode(ID1a, 
+                       "1" = "Intervention",
+                       "2" = "Control"))
+ggplot(data = yyb,
+       mapping = aes(x = ID1a, y = FinalHB)) +
+  geom_boxplot(aes(group = ID1a, fill = ID1a), na.rm = TRUE) +
+  labs(x = "County",
+       y = "Final Hemoglobin Level(g/L)",
+       fill = "") +
+  guides(fill=FALSE) +
+  theme_bw()
+```
+
+
+**Efficacy dependence.** Based on the second mathematical model, there was no evidence that the intervention's impact on the child's final HB level depends on the gender or the baseline HB level ($\beta_4 = 0.156$, $P = 0.917$; $\beta_5 = -0.003$, $P = 0.951$)(Table 3).
+
+```{r, echo=FALSE}
+fit_2 <- lm(finalHB ~ county + sex + baselineHB + county:sex + county:baselineHB,
+          data = model_data)
+tidy(fit_2, conf.int = TRUE) %>%
+  knitr::kable(digits = 3, caption = "Table 3: The analytical results of the coefficients, each corresponding to a term in the table, from the second mathematical model")
+```
+
+
+## Appendix
+
+The following chuncks of code are used to fit the models and generate graph and tables included above.
+
+```{r, eval=FALSE}
+model_data <- yyb %>%
+  select("ID1a","ID6","BaselineHB","FinalHB")
+colnames(model_data) <- c("county","sex","baselineHB","finalHB")
+model_data <- model_data %>%
+  mutate(county = recode(county,
+                         "1" = "intv",
+                         "2" = "ctrl"),
+         sex = recode(sex,
+                      "1" = "male",
+                      "2" = "female"))
+fit_1 <- lm(finalHB ~ county + sex + baselineHB,
+          data = model_data)
+tidy(fit_1, conf.int = TRUE) %>%
+  knitr::kable(digits = 3, caption = "Table 2: The analytical results of the coefficients, each corresponding to a term in the table, from the first mathematical model")
+```
+
+```{r, eval=FALSE}
+fit_2 <- lm(finalHB ~ county + sex + baselineHB + county:sex + county:baselineHB,
+          data = model_data)
+tidy(fit_2, conf.int = TRUE) %>%
+  knitr::kable(digits = 3, caption = "Table 3: The analytical results of the coefficients, each corresponding to a term in the table, from the second mathematical model")
+```
+
+The following code is used to generate graphics to assess the conditions on the linear model.
+
+```{r, fig.cap="\\label{fig:figs}Figure 2: Several graphics used to assess the conditions on linear model: 1. Mean of 0, 2. Constant variance, 3. Independence, 4. Normality"}
+aug.fit <- augment(fit_1, model_data)
+# graph for "mean of 0" and "constant variance"
+fig1 <- ggplot(data = aug.fit,
+               mapping = aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(y = "Residuals",
+       x = "Fitted Values") +
+  theme_bw()
+# graph for "independence" 
+fig2 <- ggplot(data = aug.fit,
+               mapping = aes(x = seq_along(.resid), y = .resid)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Order of Observations",
+       y = "Residual") +
+  theme_bw()
+# graph for "normality"
+fig3 <- ggplot(data = aug.fit,
+               mapping = aes(sample = .resid)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(y = "Sample Quantiles",
+       x = "Theoretical Quantiles") +
+  theme_bw()
+grid.arrange(fig1, fig2, fig3, ncol = 2)
+```
+
+The following code is used to calculated sample mean, sample standard deviation, and sample proportion for the baseline characteristics discussed above. 
+
+```{r}
+# compute mean and sd of household sizes
+intv_hz <- c(yyb %>%
+               filter(ID1a == 1)%>% 
+               select(HH1) %>% 
+               unlist %>% 
+               mean(na.rm = TRUE)%>%
+               round(3),
+             yyb %>%
+               filter(ID1a == 1)%>% 
+               select(HH1) %>% 
+               unlist %>% 
+               sd(na.rm = TRUE)%>%
+               round(3))
+ctrl_hz <- c(yyb %>%
+               filter(ID1a == 2)%>% 
+               select(HH1) %>% 
+               unlist %>% 
+               mean(na.rm = TRUE)%>%
+               round(3),
+             yyb %>%
+               filter(ID1a == 2)%>% 
+               select(HH1) %>% 
+               unlist %>% 
+               sd(na.rm = TRUE)%>%
+               round(3))
+# compute percentage of female
+intv_gender <- yyb %>%
+  filter(ID1a == 1)%>% 
+  select(ID6) %>% 
+  table() %>% 
+  as.vector()
+intv_female_percent <- round(intv_gender[2]/sum(intv_gender), 3)
+ctrl_gender <- yyb %>%
+  filter(ID1a == 2)%>% 
+  select(ID6) %>% 
+  table() %>% 
+  as.vector()
+ctrl_female_percent <- round(ctrl_gender[2]/sum(ctrl_gender), 3)
+# compute mean and sd of number of times of consumming non-liquid food
+intv_times <- c(yyb %>%
+               filter(ID1a == 1)%>% 
+               select(BN10) %>% 
+               unlist %>% 
+               mean(na.rm = TRUE)%>%
+               round(3),
+             yyb %>%
+               filter(ID1a == 1)%>% 
+               select(BN10) %>% 
+               unlist %>% 
+               sd(na.rm = TRUE)%>%
+               round(3))
+ctrl_times <- c(yyb %>%
+               filter(ID1a == 2)%>% 
+               select(BN10) %>% 
+               unlist %>% 
+               mean(na.rm = TRUE)%>%
+               round(3),
+             yyb %>%
+               filter(ID1a == 2)%>% 
+               select(BN10) %>% 
+               unlist %>% 
+               sd(na.rm = TRUE)%>%
+               round(3))
+# compute mean and sd of baseline hemoglobin level
+intv_baseHb <- c(yyb %>%
+               filter(ID1a == 1)%>% 
+               select(BaselineHB) %>% 
+               unlist %>% 
+               mean(na.rm = TRUE)%>%
+               round(3),
+             yyb %>%
+               filter(ID1a == 1)%>% 
+               select(BaselineHB) %>% 
+               unlist %>% 
+               sd(na.rm = TRUE)%>%
+               round(3))
+ctrl_baseHb <- c(yyb %>%
+               filter(ID1a == 2)%>% 
+               select(BaselineHB) %>% 
+               unlist %>% 
+               mean(na.rm = TRUE)%>%
+               round(3),
+             yyb %>%
+               filter(ID1a == 2)%>% 
+               select(BaselineHB) %>% 
+               unlist %>% 
+               sd(na.rm = TRUE)%>%
+               round(3))
+```
+
+The following code is used to perform t tests and chi-square test on the data. P-values will be returned.
+
+```{r, eval=FALSE}
+# test on the household size
+t.test(x = yyb %>% filter(ID1a == 1)%>% select(HH1) %>% unlist(),
+       y = yyb %>% filter(ID1a == 2)%>% select(HH1) %>% unlist())
+
+# test on proportion of female
+prop.test(x = c(intv_gender[2],ctrl_gender[2]),
+          n = c(sum(intv_gender), sum(ctrl_gender)),
+          alternative = "two.sided")
+
+# test on the number of time of consuming non-liquid food
+t.test(x = yyb %>% filter(ID1a == 1)%>% select(BN10) %>% unlist(),
+       y = yyb %>% filter(ID1a == 2)%>% select(BN10) %>% unlist())
+
+# test on baseline Hb level
+t.test(x = yyb %>% filter(ID1a == 1)%>% select(BaselineHB) %>% unlist(),
+       y = yyb %>% filter(ID1a == 2)%>% select(BaselineHB) %>% unlist())
+```

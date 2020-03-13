@@ -1,0 +1,235 @@
+---
+title: "Case Study on Drug Formulations"
+subtitle: "Bioengineering Statistics (MA482/BE482)"
+author: 
+  - "Scott Sun, CM#1271"
+output:
+  word_document: 
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("https://reyesem.github.io/files/MA482/MA482Setup.R")
+```
+
+```{r, echo=FALSE}
+potency <- read.csv("Potency.csv")
+
+potency <- potency %>%
+  mutate(LogDose = log(Dose)) %>%
+  mutate(B = ifelse(Formulation == "Formulation B", 1, 0))
+
+start_A <- getInitial(Response ~ SSfpl(LogDose, A, B, xmid, scal),
+                      data = filter(potency, Formulation=="Formulation A"))
+
+start_B <- getInitial(Response ~ SSfpl(LogDose, A, B, xmid, scal),
+                      data = filter(potency, Formulation=="Formulation B"))
+
+start_full <- c(start_A, start_A - start_B)
+names(start_full) <- c("b1", "b2", "b3", "b4", "b12", "b22", "b32", "b42")
+
+formula <- Response ~ b1 + b12*B + ((b2+b22*B)-(b1+b12*B))/(1+exp((b3+b32*B-LogDose)/(b4+b42*B)))
+fit_potency <- nls(formula, start = start_full, data = potency)
+
+predict_response <- expand.grid(
+  LogDose = seq(from = log(0.5), to = log(80), length.out = 1000),
+  Formulation = c("Formulation A", "Formulation B")
+)
+
+predict_response <- predict_response %>%
+  mutate(Dose = exp(LogDose)) %>%
+  mutate(B = ifelse(Formulation == "Formulation B", 1, 0))
+
+plot_response <- augment(fit_potency, newdata = predict_response)
+```
+
+## Introduction
+A biopharmaceutical company made experiments on two formulations of an unknown drug to study the their potencies. One formulation was used as the standard, called Formulation A, and the other one was the testing formulation, called Formulation B. We were given a dataset documenting each trial's dose amount, formulation type, and the response. Our first goal was to determine the parallelism between the two formulations' response-dose curves, and then we would compare the potencies of the two formulations. 
+
+## Method
+According to the scientists, the correlation structure did not exist among the repeated measurements due to the experimental settings. Apart from that, the response-dose curves for both formulations followed the four parameter logistic model. In order to test the parallelism, we assumed that both groups share a constant variance and constructed a collective model for both groups as the follows. 
+$$
+(Response)_i = (\beta_1+\beta_{1,2}(B)_i) + \frac{(\beta_2+\beta_{2,2}(B)_i)-(\beta_1+\beta_{1,2}(B)_i)}
+{1+\mathrm{exp}(\frac{\beta_3 +\beta_{3,2}(B)_i-\mathrm{log}((Dose)_i)}{\beta_4+\beta_{4,2}(B)_i})} + \epsilon_i
+$$
+where $(B)_i$ was an indicator function,
+$$
+\begin{aligned}
+(B)_i &= \left\{
+        \begin{array}{ll}
+            1, & \textrm{if the drug was based on Formulation B} \\
+            0, & \textrm{otherwise}
+        \end{array}
+    \right.\\
+\end{aligned}
+$$
+and $\mathrm{E}[\epsilon_i] = 0$, $\mathrm{Var}[\epsilon_i] = \sigma^2$.
+
+Now, we could assess our assumption on the constant variance by looking for the pattern in the residuals, which were the representative of the error term in our model. According to Figure 2, the residual vs. fitted value plot, it was reasonable to say that the two formulations shared the same variance. 
+
+If the parallelism was justified, the nonlinear model could be reduced as the follows.
+$$
+(Response)_i = \beta_1 + \frac{\beta_2-\beta_1}
+{1+\mathrm{exp}(\frac{\beta_3 +\beta_{3,2}(B)_i-\mathrm{log}((Dose)_i)}{\beta_4})} + \epsilon_i
+$$
+
+It was known that $ED50_{\textrm{standard}} = \mathrm{e}^{\beta_3}$ and $ED50_{\textrm{test}} = \mathrm{e}^{\beta_3+\beta_{3,2}}$.The relative potency could be calculated as the follows.
+$$
+r = \frac{ED50_{\textrm{standard}}}{ED50_{\textrm{test}}}
+$$
+Accordingly, we could use the estimates of parameters to calculate the estimated relative potency.
+
+Finally, In order to calculate the estimated response at some dose amount of interest, we could simply plug the values into our final reduced fitted model.
+
+## Results
+**Assess the parallelism between the dose-response curves of the two formulations.** According to the fitted collective model, $\hat{\beta}_{1,2} = -274.067$($P=0.151$), $\hat{\beta}_{2,2} = 278.310$($P=0.615$), $\hat{\beta}_{4,2} = -0.201$($P=0.151$)(See in Table 1). By applying the linear hypothesis test, it was reasonable to say that the two curves are parallel $(P=0.463)$. The test result was consistent with the Figure 1 below. According to the plot, as the curves approached to the equilibrium phases, they tended to be parallel. 
+
+```{r, echo=FALSE}
+start_full2 <- c(start_full[1:4], start_full[7])
+formula2 <- Response ~ b1 + (b2 - b1)/(1 + exp((b3+b32*B-LogDose)/b4))
+fit_potency2 <- nls(formula2, start = start_full2, data = potency)
+table_2 <- tidy(fit_potency2) 
+```
+
+```{r, echo=FALSE, fig.cap="\\label{fig:figs}Figure 1: 48 data points and estimated response-dose curves based on the initial collective model for Formulation A and B", fig.width=5, fig.asp=0.68}
+ggplot() +
+  geom_point(data = potency,
+             mapping = aes(y = Response,
+                           x = Dose,
+                           color = Formulation)) +
+  geom_line(data = plot_response,
+            mapping = aes(y = .fitted,
+                          x = Dose,
+                          color = Formulation),
+            size = 1) +
+  labs(y = "Response",
+       x = "Dose",
+       color = "Formulation") +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+```{r, echo=FALSE}
+ed50_a <- exp(table_2$estimate[3])
+ed50_b <- exp(table_2$estimate[3]+table_2$estimate[5])
+r <- ed50_a/ed50_b
+```
+
+**Estimate the relative potency given that the two curves are paralell.** The parallelism existed between the curves, so the estimated relative potency was `r round(r,3)` based on the analysis results from Table 1. Since $r < 1$ ($P<0.001$, see in Table 2), Formulation B was less potent than Formulation A so that one would need more dose of B to have the same response when a given dose of A was used. 
+
+**Find the estimated responses at 10, 20, and 50 dose units of the two formulations respectively.** Based on the estimates of the parameters, we were able to calculate the estimated responses that would be seen at 10, 20 and 50 dose units for both standard and testing formulations.
+
+```{r, echo=FALSE}
+estimate <- data.frame("Dose"=rep(c(10, 20, 50), 2),
+                       "B"=c(rep(0,3),rep(1,3))) %>%
+  mutate(LogDose = log(Dose)) 
+estimate <- augment(fit_potency2, newdata = estimate) 
+colnames(estimate)[4] <- "EstResp"
+estimate %>%
+  knitr::kable(digits = 3, caption = "Table 2: The estimated responses at different doses of interest in Formulation A and B")
+```
+
+**Limitation of the study.** According to the scientists, samples in the study were not placed on the plate systematically. In order to have a more precise analytical result, we might want to place them systematically. As the result, a more complex model should be generated to account for the correlation structures within the repeated measurements. A mixed-effect model would be suggested.
+
+## Appendix
+Before we obtain the initial values for the nonlinear model, we should mutate the original data so that they can be used to fit the `SSfpl()` appropriately.
+```{r}
+potency <- potency %>%
+  mutate(LogDose = log(Dose)) %>%
+  mutate(B = ifelse(Formulation == "Formulation B", 1, 0))
+```
+
+Now we are able to obtain the initial value for the models we constructed.
+```{r}
+# Starting values for Formulation A
+start_A <- getInitial(Response ~ SSfpl(LogDose, A, B, xmid, scal),
+                      data = filter(potency, Formulation=="Formulation A"))
+
+# Starting values for Formulation B
+start_B <- getInitial(Response ~ SSfpl(LogDose, A, B, xmid, scal),
+                      data = filter(potency, Formulation=="Formulation B"))
+
+# Create combined starting values
+start_full <- c(start_A, start_B - start_A)
+names(start_full) <- c("b1", "b2", "b3", "b4", "b12", "b22", "b32", "b42")
+```
+
+Now we can fit the collective model.
+```{r}
+formula <- Response ~ b1 + b12*B + ((b2+b22*B)-(b1+b12*B))/(1+exp((b3+b32*B-LogDose)/(b4+b42*B)))
+fit_potency <- nls(formula, start = start_full, data = potency)
+tidy(fit_potency) %>%
+  knitr::kable(digits = 3, caption = "Table 1: The analytical results of the initial collective logistic model.")
+```
+
+Apply the linear hypothesis test to assess the parallelism.
+```{r}
+K <- matrix(
+  c(rep(0,4),1,0,0,0,
+    rep(0,4),0,1,0,0,
+    rep(0,4),0,0,0,1),
+  nrow = 3, ncol = 8, byrow = TRUE
+)
+linearHypothesis(fit_potency, K)
+```
+
+Fit the reduced model.
+```{r}
+start_full2 <- c(start_full[1:4], start_full[7])
+formula2 <- Response ~ b1 + (b2 - b1)/(1 + exp((b3+b32*B-LogDose)/b4))
+fit_potency2 <- nls(formula2, start = start_full2, data = potency)
+table_2 <- tidy(fit_potency2) 
+table_2 %>%
+  knitr::kable(digits = 3, caption = "Table 2: The analytical results of the reduced logistic model.")
+```
+
+Attach the code to generate Figure 1.
+```{r, eval=FALSE}
+predict_response <- expand.grid(
+  LogDose = seq(from = log(0.5), to = log(80), length.out = 1000),
+  Formulation = c("Formulation A", "Formulation B")
+)
+predict_response <- predict_response %>%
+  mutate(Dose = exp(LogDose)) %>%
+  mutate(B = ifelse(Formulation == "Formulation B", 1, 0))
+plot_response <- augment(fit_potency, newdata = predict_response)
+
+ggplot() +
+  geom_point(data = potency,
+             mapping = aes(y = Response,
+                           x = Dose,
+                           color = Formulation)) +
+  geom_line(data = plot_response,
+            mapping = aes(y = .fitted,
+                          x = Dose,
+                          color = Formulation),
+            size = 1) +
+  labs(y = "Response",
+       x = "Dose",
+       color = "Formulation") +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+Generate the residuals vs. fitted values plot to assess the assumption on constant variance.
+```{r, fig.cap="\\label{fig:figs}Figure 2: Residuals vs. fitted values plot", fig.width=5, fig.asp=0.68}
+aug_potency <- augment(fit_potency, potency)
+ggplot(data = aug_potency,
+       mapping = aes(x = .fitted, y = .resid, colour = Formulation)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(y = "Residuals",
+       x = "Fitted Values") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+Calculate the estimated relative potency.
+```{r}
+ed50_a <- exp(table_2$estimate[3])
+ed50_b <- exp(table_2$estimate[3]+table_2$estimate[5])
+r <- ed50_a/ed50_b
+```
